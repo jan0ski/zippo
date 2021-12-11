@@ -1,0 +1,125 @@
+variant: fcos
+version: 1.1.0
+passwd:
+  users:
+    - name: {{ .SSHUser }}
+      ssh_authorized_keys:
+        - {{ .SSHPubkey }}
+systemd:
+  units:
+    # Boostrap install with required packages
+    - name: bootstrap.service
+      enabled: true
+      contents: |
+        [Unit]
+        Description=Install boostrap rpm packages, CNI & crictl
+        Wants=network-online.target
+        After=network-online.target
+
+        # We run before `zincati.service` to avoid conflicting rpm-ostree transactions.
+        Before=zincati.service
+        ConditionPathExists=!/var/lib/%N.stamp
+
+        [Service]
+        Type=oneshot
+        RemainAfterExit=yes
+        ExecStart=swapoff -a
+        ExecStart=/usr/bin/rpm-ostree install --apply-live --allow-inactive $BOOSTRAP_RPMS
+        ExecStart=curl -L "https://github.com/containernetworking/plugins/releases/download/${CNI_VERSION}/cni-plugins-linux-amd64-${CNI_VERSION}.tgz" | tar -C /opt/cni/bin -xz
+        ExecStart=curl -L "https://github.com/kubernetes-sigs/cri-tools/releases/download/${CRICTL_VERSION}/crictl-${CRICTL_VERSION}-linux-amd64.tar.gz" | tar -C /usr/bin -xz
+        ExecStart="setenforce 0 && sed -i 's/^SELINUX=enforcing$/SELINUX=permissive/' /etc/selinux/config"
+        ExecStart=/bin/touch /var/lib/%N.stamp
+
+        [Install]
+        WantedBy=multi-user.target
+      dropins:
+        - name: boostrap-rpms.conf
+          contents: |
+            [Service]
+            Environment="BOOTSTRAP_RPMS=ethtool conntrack"
+            Environment="CNI_VERSION={{ .CNIVersion }}"
+            Environment="CRICTL_VERSION={{ .CRICtlVersion }}"
+
+    # Kubernetes services
+    - name: kubelet.service
+      enable: true
+      contents: |
+        [Unit]
+        Description=kubelet: The Kubernetes Node Agent
+        Documentation=https://kubernetes.io/docs/home/
+        Wants=network-online.target
+        After=network-online.target
+
+        [Service]
+        ExecStart=/usr/bin/kubelet
+        Restart=always
+        StartLimitInterval=0
+        RestartSec=10
+
+        [Install]
+        WantedBy=multi-user.target
+      dropins:
+        - name: 10-kubeadm.conf
+          contents: |
+            [Service]
+            Environment="KUBELET_KUBECONFIG_ARGS=--bootstrap-kubeconfig=/etc/kubernetes/bootstrap-kubelet.conf --kubeconfig=/etc/kubernetes/kubelet.conf --cgroup-driver=systemd"
+            Environment="KUBELET_CONFIG_ARGS=--config=/var/lib/kubelet/config.yaml"
+
+            # This is a file that "kubeadm init" and "kubeadm join" generates at runtime, populating the KUBELET_KUBEADM_ARGS variable dynamically
+            EnvironmentFile=-/var/lib/kubelet/kubeadm-flags.env
+
+            # This is a file that the user can use for overrides of the kubelet args as a last resort. Preferably, the user should use
+            # the .NodeRegistration.KubeletExtraArgs object in the configuration files instead. KUBELET_EXTRA_ARGS should be sourced from this file.
+            EnvironmentFile=-/etc/default/kubelet
+            ExecStart=
+            ExecStart=/usr/bin/kubelet $KUBELET_KUBECONFIG_ARGS $KUBELET_CONFIG_ARGS $KUBELET_KUBEADM_ARGS $KUBELET_EXTRA_ARGS
+
+    - name: serial-getty@ttyS0.service
+      dropins:
+        - name: autologin-core.conf
+          contents: |
+            [Service]
+            # Override Execstart in main unit
+            ExecStart=
+            # Add new Execstart with `-` prefix to ignore failure`
+            ExecStart=-/usr/sbin/agetty --autologin core --noclear %I $TERM
+
+storage:
+  files:
+    - path: /etc/hostname
+      mode: 0644
+      contents:
+        inline: |
+          {{ .Hostname }}
+
+    - path: /etc/profile.d/systemd-pager.sh
+      mode: 0644
+      contents:
+        inline: |
+          # Tell systemd to not use a pager when printing information
+          export SYSTEMD_PAGER=cat
+
+    - path: /etc/sysctl.d/20-silence-audit.conf
+      mode: 0644
+      contents:
+        inline: |
+          # Raise console message logging level from DEBUG (7) to WARNING (4)
+          # to hide audit messages from the interactive console
+          kernel.printk=4
+
+    # Kubernetes binaries
+    - path: /usr/bin/kubelet
+      overwrite: true
+      mode: 0744
+      contents:
+        source: https://storage.googleapis.com/kubernetes-release/release/{{ .K8sVersion }}/bin/linux/amd64/kubelet
+    - path: /usr/bin/kubeadm
+      overwrite: true
+      mode: 0744
+      contents:
+        source: https://storage.googleapis.com/kubernetes-release/release/{{ .K8sVersion }}/bin/linux/amd64/kubeadm
+    - path: /usr/bin/kubectl
+      overwrite: true
+      mode: 0744
+      contents:
+        source: https://storage.googleapis.com/kubernetes-release/release/{{ .K8sVersion }}/bin/linux/amd64/kubectl

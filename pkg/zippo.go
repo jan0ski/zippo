@@ -2,12 +2,12 @@ package zippo
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strings"
 	"text/template"
 
-	"github.com/coreos/butane/config"
+	bc "github.com/coreos/butane/config"
 	"github.com/coreos/butane/config/common"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
@@ -15,7 +15,12 @@ import (
 )
 
 type args struct {
-	Hostname string
+	Hostname      string
+	SSHUser       string
+	SSHPubkey     string
+	CNIVersion    string
+	CRICtlVersion string
+	K8sVersion    string
 }
 
 type Server struct {
@@ -25,6 +30,11 @@ type Server struct {
 type ServerConfig struct {
 	Address        string
 	Port           int
+	SSHUser        string
+	SSHPubkey      string
+	CNIVersion     string
+	CRICtlVersion  string
+	K8sVersion     string
 	ButaneTemplate string
 }
 
@@ -36,25 +46,28 @@ func (s *Server) Run() {
 
 func (s *Server) serveButaneTranslator(c *gin.Context) {
 	// Set hostname from host header
-	hostname := c.Request.Host
+	hostname := strings.Split(c.Request.Host, ":")[0]
 	if hostname == "" {
-		c.JSON(http.StatusInternalServerError, nil)
+		c.JSON(http.StatusInternalServerError, "No hostname specified")
 		return
 	}
-	log.Print(hostname)
+	log.Infof("Serving ignition config for %s at %s", hostname, c.Request.RemoteAddr)
 
 	// Translate human-readable Butane config to Ignition
-	ignitionConfig, err := createIgnitionConfig(hostname, s.Config.ButaneTemplate)
+	ignitionConfig, err := createIgnitionConfig(hostname, s.Config)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, nil)
+		log.Error(err.Error())
+		c.JSON(http.StatusInternalServerError, err.Error())
 		return
 	}
 	c.JSON(http.StatusOK, string(ignitionConfig))
 }
 
-func createIgnitionConfig(hostname, butaneFile string) ([]byte, error) {
+func createIgnitionConfig(hostname string, config *ServerConfig) ([]byte, error) {
+	log.Infof("Using config at %s", config.ButaneTemplate)
+
 	// Parse config template
-	file, err := ioutil.ReadFile(butaneFile)
+	file, err := ioutil.ReadFile(config.ButaneTemplate)
 	if err != nil {
 		return nil, err
 	}
@@ -65,17 +78,26 @@ func createIgnitionConfig(hostname, butaneFile string) ([]byte, error) {
 	}
 
 	// Render butane config template with given hostname
+	vars := args{
+		Hostname:      hostname,
+		SSHUser:       config.SSHUser,
+		SSHPubkey:     config.SSHPubkey,
+		CNIVersion:    config.CNIVersion,
+		CRICtlVersion: config.CRICtlVersion,
+		K8sVersion:    config.K8sVersion,
+	}
 	butaneConfig := &bytes.Buffer{}
-	err = butaneTemplate.Execute(butaneConfig, args{Hostname: hostname})
+	err = butaneTemplate.Execute(butaneConfig, vars)
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(butaneConfig.String())
+	log.Info("Populated Butane template")
 
-	ignitionConfig, r, err := config.TranslateBytes(butaneConfig.Bytes(), common.TranslateBytesOptions{Pretty: true})
+	ignitionConfig, r, err := bc.TranslateBytes(butaneConfig.Bytes(), common.TranslateBytesOptions{Pretty: true})
 	if err != nil {
 		return nil, errors.Wrapf(err, "Error translating config: %s", r.String())
 	}
+	log.Info("Generated Ignition config")
 
 	return ignitionConfig, nil
 }
