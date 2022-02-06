@@ -25,7 +25,7 @@ func init() {
 	flag.StringVar(&sshPubkey, "ssh-pubkey", "", "key to add to `authorized_hosts` for ssh access")
 	flag.StringVar(&k8sVersion, "k8s", "v1.20.14", "Kubernetes version to install")
 	flag.StringVar(&cniVersion, "cni-version", "v0.8.2", "CNI version to install")
-	flag.StringVar(&templatePath, "template", "/etc/zippo/template.yaml", "path to Butane template")
+	flag.StringVar(&templatePath, "template", "/etc/zippo/config.tmpl", "path to Butane template")
 	flag.Parse()
 }
 
@@ -40,7 +40,7 @@ type args struct {
 }
 
 func main() {
-	// Don't set `Hostname`, its populated from the host header
+	// Don't set `Hostname`, it's populated from the host header
 	args := args{
 		Hostname:      "{{ .Hostname }}",
 		SSHUser:       sshUser,
@@ -50,12 +50,13 @@ func main() {
 		CNIVersion:    cniVersion,
 	}
 
-	// overwrite config file with rendered variables
+	// populate config file with rendered template
+	configPath := "/etc/zippo/config.yaml"
 	template, err := zippo.Render(templatePath, args)
 	if err != nil {
 		log.Fatalf(err.Error())
 	}
-	ioutil.WriteFile(templatePath, template.Bytes(), 0600)
+	ioutil.WriteFile(configPath, template.Bytes(), 0600)
 
-	zippo.NewServer(listenAddr, listenPort, templatePath, args).Run()
+	zippo.NewServer(listenAddr, listenPort, configPath, args).Run()
 }
