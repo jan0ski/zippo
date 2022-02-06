@@ -55,20 +55,27 @@ func (s *Server) Run() {
 
 func (s *Server) serveButaneTranslator(w http.ResponseWriter, r *http.Request) {
 	// Set hostname from host header
-	hostname := strings.Split(r.Host, ":")[0]
-	if hostname == "" {
+	fqdn := strings.Split(r.Host, ":")[0]
+	if fqdn == "" {
 		httpError(w, "No hostname specified")
+		return
+	}
+
+	hostname := strings.Split(fqdn, ".zippo.")[0]
+	if hostname == "" {
+		httpError(w, "Error parsing hostname")
 		return
 	}
 	log.Debugf("Served ignition config for %s at %s", hostname, r.RemoteAddr)
 
-	ignitionConfig, err := CreateIgnitionConfig(s.Config.TemplatePath, hostname)
+	args := struct{ Hostname string }{Hostname: hostname}
+	ignitionConfig, err := CreateIgnitionConfig(s.Config.TemplatePath, args)
 	if err != nil {
 		log.Error(err.Error())
 		httpError(w, "failed to render ignition config")
 	} else {
 		log.Infof("Successfully rendered ignition config")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(ignitionConfig)
+		json.NewEncoder(w).Encode(string(ignitionConfig))
 	}
 }

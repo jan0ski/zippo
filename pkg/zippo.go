@@ -34,7 +34,7 @@ func Render(templatePath string, args interface{}) (*bytes.Buffer, error) {
 }
 
 // CreateIgnitionConfig creates an ignition config from a rendered butane template with a given hostname
-func CreateIgnitionConfig(butaneTemplate, hostname string) ([]byte, error) {
+func CreateIgnitionConfig(butaneTemplate string, hostname interface{}) ([]byte, error) {
 	butaneConfig, err := Render(butaneTemplate, hostname)
 	if err != nil {
 		return nil, err

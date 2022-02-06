@@ -14,6 +14,7 @@ var (
 	sshUser      string
 	sshPubkey    string
 	k8sVersion   string
+	cniVersion   string
 	templatePath string
 )
 
@@ -23,13 +24,14 @@ func init() {
 	flag.StringVar(&sshUser, "ssh-user", "core", "initial user available via ssh")
 	flag.StringVar(&sshPubkey, "ssh-pubkey", "", "key to add to `authorized_hosts` for ssh access")
 	flag.StringVar(&k8sVersion, "k8s", "v1.20.14", "Kubernetes version to install")
+	flag.StringVar(&cniVersion, "cni-version", "v0.8.2", "CNI version to install")
 	flag.StringVar(&templatePath, "template", "/etc/zippo/template.yaml", "path to Butane template")
 	flag.Parse()
 }
 
 // Define your own args to pass into the template
-// Don't include `Hostname`, its populated from the host header
 type args struct {
+	Hostname      string
 	SSHUser       string
 	SSHPubkey     string
 	CNIVersion    string
@@ -38,10 +40,14 @@ type args struct {
 }
 
 func main() {
+	// Don't set `Hostname`, its populated from the host header
 	args := args{
-		SSHUser:    sshUser,
-		SSHPubkey:  sshPubkey,
-		K8sVersion: k8sVersion,
+		Hostname:      "{{ .Hostname }}",
+		SSHUser:       sshUser,
+		SSHPubkey:     sshPubkey,
+		K8sVersion:    k8sVersion,
+		CRICtlVersion: k8sVersion,
+		CNIVersion:    cniVersion,
 	}
 
 	// overwrite config file with rendered variables
