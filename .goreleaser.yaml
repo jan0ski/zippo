@@ -1,6 +1,9 @@
+project_name: zippo
 
-oks:
+before:
+  hooks:
     - go mod tidy
+
 builds:
   - env:
       - CGO_ENABLED=0
@@ -13,12 +16,22 @@ builds:
     binary: zippo
 
 dockers:
-  - image_templates:
-    - jan0ski/zippo
+- image_templates: ["ghcr.io/jan0ski/zippo:{{ .Tag }}"]
+  dockerfile: Dockerfile
+  build_flag_templates:
+  - --label=org.opencontainers.image.title={{ .ProjectName }}
+  - --label=org.opencontainers.image.description={{ .ProjectName }}
+  - --label=org.opencontainers.image.url=https://github.com/jan0ski/zippo
+  - --label=org.opencontainers.image.source=https://github.com/jan0ski/zippo
+  - --label=org.opencontainers.image.version={{ .Version }}
+  - --label=org.opencontainers.image.created={{ time "2006-01-02T15:04:05Z07:00" }}
+  - --label=org.opencontainers.image.revision={{ .FullCommit }}
 
 checksum:
   name_template: 'checksums.txt'
+
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
+
 changelog:
   sort: asc
