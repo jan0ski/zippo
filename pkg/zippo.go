@@ -34,16 +34,16 @@ func Render(templatePath string, args interface{}) (*bytes.Buffer, error) {
 }
 
 // CreateIgnitionConfig creates an ignition config from a rendered butane template with a given hostname
-func CreateIgnitionConfig(butaneTemplate string, hostname interface{}) ([]byte, error) {
+func CreateIgnitionConfig(butaneTemplate string, hostname interface{}) (string, error) {
 	butaneConfig, err := Render(butaneTemplate, hostname)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	ignitionConfig, r, err := config.TranslateBytes(butaneConfig.Bytes(), common.TranslateBytesOptions{Pretty: true})
 	if err != nil {
-		return nil, errors.Wrapf(err, "error translating config: %s", r.String())
+		return "", errors.Wrapf(err, "error translating config: %s", r.String())
 	}
 
-	return ignitionConfig, nil
+	return string(ignitionConfig), nil
 }

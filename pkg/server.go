@@ -54,6 +54,9 @@ func (s *Server) Run() {
 }
 
 func (s *Server) serveButaneTranslator(w http.ResponseWriter, r *http.Request) {
+	// Set content type to json
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+
 	// Set hostname from host header
 	fqdn := strings.Split(r.Host, ":")[0]
 	if fqdn == "" {
@@ -66,16 +69,18 @@ func (s *Server) serveButaneTranslator(w http.ResponseWriter, r *http.Request) {
 		httpError(w, "Error parsing hostname")
 		return
 	}
-	log.Debugf("Served ignition config for %s at %s", hostname, r.RemoteAddr)
+	log.Infof("Serving ignition config for %s at %s", hostname, r.RemoteAddr)
 
+	// Respond with ignition config including rendered hostname
 	args := struct{ Hostname string }{Hostname: hostname}
 	ignitionConfig, err := CreateIgnitionConfig(s.Config.TemplatePath, args)
 	if err != nil {
 		log.Error(err.Error())
-		httpError(w, "failed to render ignition config")
+		httpError(w, "failed to render butane template")
 	} else {
-		log.Infof("Successfully rendered ignition config")
+		log.Infof("Successfully rendered butane template into ignition config")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(string(ignitionConfig))
+		json.NewEncoder(w).Encode(ignitionConfig)
 	}
+
 }
