@@ -9,14 +9,17 @@ builds:
       - CGO_ENABLED=0
     goos:
       - linux
-      - windows
-      - darwin
     ldflags:
       - -w
     binary: zippo
 
 dockers:
-- image_templates: ["ghcr.io/jan0ski/zippo:{{ .Tag }}"]
+- id: zippo-linux-x64
+  goos: linux
+  goarch: amd64
+  image_templates: 
+  - "ghcr.io/jan0ski/zippo:{{ .Tag }}"
+  - "ghcr.io/jan0ski/zippo:latest"
   dockerfile: Dockerfile
   build_flag_templates:
   - --label=org.opencontainers.image.title={{ .ProjectName }}
