@@ -1,10 +1,10 @@
 apiVersion: apps/v1
-kind: Configmap
+kind: ConfigMap
 metadata:
   labels:
     app: zippo
   name: zippo-config
-data: 
+data:
   config: |
     variant: fcos
     version: 1.1.0
