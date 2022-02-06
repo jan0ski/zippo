@@ -55,7 +55,7 @@ func (s *Server) Run() {
 
 func (s *Server) serveButaneTranslator(w http.ResponseWriter, r *http.Request) {
 	// Set content type to json
-	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.Header().Set("Content-Type", "application/json")
 
 	// Set hostname from host header
 	fqdn := strings.Split(r.Host, ":")[0]

@@ -2,11 +2,13 @@ package zippo
 
 import (
 	"bytes"
+	"encoding/json"
 	"io/ioutil"
 	"text/template"
 
 	"github.com/coreos/butane/config"
 	"github.com/coreos/butane/config/common"
+	"github.com/coreos/ignition/v2/config/v3_1/types"
 	"github.com/pkg/errors"
 )
 
@@ -34,16 +36,21 @@ func Render(templatePath string, args interface{}) (*bytes.Buffer, error) {
 }
 
 // CreateIgnitionConfig creates an ignition config from a rendered butane template with a given hostname
-func CreateIgnitionConfig(butaneTemplate string, hostname interface{}) (string, error) {
+func CreateIgnitionConfig(butaneTemplate string, hostname interface{}) (types.Config, error) {
+	var ignitionConfig types.Config
 	butaneConfig, err := Render(butaneTemplate, hostname)
 	if err != nil {
-		return "", err
+		return ignitionConfig, err
 	}
 
-	ignitionConfig, r, err := config.TranslateBytes(butaneConfig.Bytes(), common.TranslateBytesOptions{Pretty: true})
+	ignitionBytes, r, err := config.TranslateBytes(butaneConfig.Bytes(), common.TranslateBytesOptions{Pretty: true})
 	if err != nil {
-		return "", errors.Wrapf(err, "error translating config: %s", r.String())
+		return ignitionConfig, errors.Wrapf(err, "error translating config: %s", r.String())
 	}
 
-	return string(ignitionConfig), nil
+	err = json.Unmarshal(ignitionBytes, &ignitionConfig)
+	if err != nil {
+		return ignitionConfig, errors.Wrapf(err, "error translating config: %s", r.String())
+	}
+	return ignitionConfig, nil
 }
