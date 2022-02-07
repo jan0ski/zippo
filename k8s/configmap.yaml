@@ -5,6 +5,73 @@ metadata:
     app: zippo
   name: zippo-config
 data:
-  config: |
+  zippo.tmpl: |
     variant: fcos
     version: 1.1.0
+
+    passwd:
+      users:
+        - name: {{ .SSHUser }}
+          ssh_authorized_keys:
+            - {{ .SSHPubkey }}
+    
+    systemd:
+      units:
+        # Bootstrap service
+        - name: bootstrap.service
+          enabled: true
+          contents: |
+            [Unit]
+            Description=Bootstrap script
+
+            # Make sure we have networking up and running
+            Wants=network-online.target
+            After=network-online.target
+
+            # We run before `zincati.service` to avoid conflicting rpm-ostree transactions.
+            Before=zincati.service
+            ConditionPathExists=!/var/lib/%N.stamp
+
+            [Service]
+            Type=oneshot
+            RemainAfterExit=yes
+            ExecStart=/usr/local/bin/bootstrap.sh
+            ExecStart=/bin/touch /var/lib/%N.stamp
+
+            [Install]
+            WantedBy=multi-user.target
+          dropins:
+            - name: boostrap-rpms.conf
+              contents: |
+                [Service]
+                Environment="BOOTSTRAP_RPMS="
+                Environment="CNI_VERSION={{ .CNIVersion }}"
+                Environment="CRICTL_VERSION={{ .CRICtlVersion }}"
+            
+    
+    storage:
+      files:
+        - path: /etc/hostname
+          mode: 0644
+          contents:
+            inline: |
+              {{ .Hostname }}
+
+        # Bootstrap script
+        - path: /usr/local/bin/bootstrap.sh
+          mode: 0755
+          contents:
+            inline: |
+            #!/bin/bash 
+            set -euo pipefail
+
+            # Disable swap
+            swapoff -a
+            
+            # Install package dependencies if needed
+            /usr/bin/rpm-ostree install --apply-live --allow-inactive --idempotent $BOOTSTRAP_RPMS
+
+            # Install CNI, CRICTL
+            mkdir -p /opt/cni/bin
+            curl -L "https://github.com/containernetworking/plugins/releases/download/${CNI_VERSION}/cni-plugins-linux-amd64-${CNI_VERSION}.tgz" | tar -C /opt/cni/bin -xz
+            curl -L "https://github.com/kubernetes-sigs/cri-tools/releases/download/${CRICTL_VERSION}/crictl-${CRICTL_VERSION}-linux-amd64.tar.gz" | tar -C /usr/local/bin -xz
