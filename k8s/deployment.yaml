@@ -23,15 +23,21 @@ spec:
           - --ssh-user=core
           - --ssh-pubkey=
           - --k8s=v1.20.0
-          - --template=/etc/zippo/zippo.yaml
+          - --template=/etc/zippo/templates/zippo.tmpl
+          - --config=/etc/zippo/config.yaml
         volumeMounts:
         - name: zippo-etc
           mountPath: /etc/zippo
+        - name: zippo-etc-template
+          mountPath: /etc/zippo/templates
       volumes:
       - name: zippo-etc
+        emptyDir: {}
+      - name: zippo-etc-template
         configMap:
           name: zippo-config
           items:
-            - key: config
-            - path: config.yaml
+          - key: zippo.tmpl
+            path: zippo.tmpl
+
   
